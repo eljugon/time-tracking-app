@@ -106,6 +106,7 @@ npx wrangler kv namespace create RAIL
 npx wrangler secret put RAIL_ACCESS_TOKEN     # invéntate uno largo: openssl rand -hex 32
 npx wrangler secret put ANTHROPIC_API_KEY     # sk-ant-...
 npx wrangler secret put MS365_MCP_TOKEN       # token OAuth del conector, si lo tienes
+npx wrangler secret put ONEDRIVE_PATH         # opcional: enlace del Excel, ver abajo
 
 # 3. Publicar
 npx wrangler deploy
@@ -114,6 +115,21 @@ npx wrangler deploy
 Queda en `https://rail-timesheet.<tu-cuenta>.workers.dev`. En la app, dentro de
 **Configuración y sincronización**, se rellenan *URL del servidor* y *Token de acceso*
 con ese `RAIL_ACCESS_TOKEN`. A partir de ahí todos los dispositivos ven lo mismo.
+
+### El enlace del Excel
+
+Un enlace de compartición de OneDrive da acceso al fichero a quien lo tenga, así que
+**no debe acabar en el repositorio** — ni en el código ni en `wrangler.toml`, que
+también se publica. Dos sitios donde sí puede estar:
+
+- **En la app**, en *Configuración → Archivo Excel en OneDrive*. Con backend se guarda
+  en KV como ajuste compartido y el resto de dispositivos lo heredan; sin backend hay
+  que escribirlo en cada uno.
+- **Como secreto del Worker**, con `npx wrangler secret put ONEDRIVE_PATH`. Sirve de
+  valor por defecto cuando no hay nada guardado en KV, y nunca pasa por git.
+
+Si un enlace se ha expuesto alguna vez, revocarlo en OneDrive y generar uno nuevo es lo
+único que lo desactiva: borrarlo del código no lo saca del historial.
 
 Si tu usuario de GitHub no es `eljugon`, ajusta `ALLOWED_ORIGINS` en `wrangler.toml`
 con la URL de tus Pages. El valor `null` que ya viene es el origen que envía la app de

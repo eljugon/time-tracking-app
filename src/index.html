@@ -3,8 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; worker-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
 <title>Rail — Time Tracking</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#10141A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rail">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -177,7 +185,7 @@ const SITES = [
 ];
 const siteByKey = k => SITES.find(s=>s.key===k);
 
-let STATE = { entries:{}, settings:{ regulatedHours:'07:45', oneDrivePath:'https://1drv.ms/x/c/645f23be087ccda8/IQDDn3zdHrcrSZs7VGGMrLPxAYez6_G3LAtemmJJ9VEW5fo', notifDevice:false, lastSite:'home', apiKey:'', mcpToken:'' } };
+let STATE = { entries:{}, settings:{ regulatedHours:'07:45', oneDrivePath:'', notifDevice:false, lastSite:'home', apiKey:'', mcpToken:'' } };
 let ui = { historyOpen:false, settingsOpen:false, moreOpen:false, editingDate:null };
 let pending = { entryTime:null, exitTime:null, breakStart:null, breakEnd:null, breakEndTouched:false }; // user-edited, unconfirmed times
 
@@ -585,6 +593,13 @@ function startLiveTimer(since){
     el.textContent = hm(Math.max(0, minsBetween(since, nowHM()))) + ' transcurridas';
   };
   tick(); liveTimerInt = setInterval(tick, 15000);
+}
+
+/* ================= PWA ================= */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{ /* sin modo offline */ });
+  });
 }
 
 /* ================= INIT ================= */

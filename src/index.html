@@ -428,7 +428,8 @@ function logSync(line){ const el=document.getElementById('syncLog'); if(el){ el.
 /* ================= NOTIFICATIONS (best-effort, tab must be open) ================= */
 let firedToday = {};
 function checkDeviceReminders(){
-  if(!STATE.settings.notifDevice || Notification.permission!=='granted') return;
+  if(!STATE.settings.notifDevice || typeof Notification==='undefined') return;
+  if(Notification.permission!=='granted') return;
   const t = nowHM(); const iso = todayISO();
   firedToday[iso] = firedToday[iso] || {};
   const map = {'09:00':'¿A qué hora has empezado a trabajar? ¿Y desde dónde?', '12:00':'¿Vas a hacer pausa hoy? Regístrala en Rail.', '16:00':'¿A qué hora terminas hoy?'};
@@ -673,6 +674,12 @@ function closeDayEditor(){
 function toggleHistory(){ ui.historyOpen=!ui.historyOpen; render(); }
 function toggleSettings(){ ui.settingsOpen=!ui.settingsOpen; render(); }
 async function toggleNotif(){
+  // En iOS solo existe Notification dentro de una PWA instalada: en Safari a
+  // pelo la clase no está definida y esto reventaría sin decir nada.
+  if(typeof Notification==='undefined'){
+    showToast('Este navegador no permite avisos. En iPhone, añade la app a la pantalla de inicio primero.');
+    return;
+  }
   if(!STATE.settings.notifDevice){
     const perm = await Notification.requestPermission();
     if(perm!=='granted'){ showToast('Permiso de notificaciones denegado.'); return; }

@@ -9,13 +9,13 @@ PWA se instala en el móvil. Tres formas de usarlo:
 
 | Modo | Cómo | Datos | Sincronización con Excel |
 |---|---|---|---|
-| App de escritorio | `npm start` o el instalador generado | fichero JSON en la carpeta de datos de la app | sí |
-| PWA (móvil y escritorio) | desde la URL de GitHub Pages, «Añadir a pantalla de inicio» / «Instalar» | `localStorage` del navegador | no |
-| Navegador | abrir `src/index.html` directamente | `localStorage` del navegador | no |
+| App de escritorio | `npm start` o el instalador generado | fichero JSON local | sí, con clave propia |
+| PWA (móvil y escritorio) | desde la URL de GitHub Pages, «Añadir a pantalla de inicio» / «Instalar» | `localStorage` | solo con backend |
+| Navegador | abrir `src/index.html` directamente | `localStorage` | solo con backend |
 
-Los datos **no se sincronizan entre dispositivos**: cada uno guarda los suyos. El
-móvil sirve para fichar sobre la marcha; el Excel de OneDrive es el sitio donde todo
-acaba junto, y ahí solo escribe la app de escritorio.
+Con el [backend opcional](#backend-opcional-cloudflare-workers) configurado, cualquiera
+de los tres modos comparte los mismos registros y puede escribir en el Excel. Sin él,
+cada dispositivo guarda lo suyo y solo la app de escritorio sincroniza.
 
 ## Estructura
 
@@ -24,6 +24,8 @@ electron/main.cjs           proceso principal: ventana, almacenamiento en disco,
 electron/preload.cjs        puente seguro entre el proceso principal y la interfaz
 src/index.html              la app entera (UI + lógica), sin dependencias externas salvo las fuentes
 src/manifest.webmanifest    metadatos de la PWA (nombre, iconos, modo standalone)
+server/src/worker.js        backend opcional: almacén compartido y escritura en el Excel
+server/wrangler.toml        configuración del Worker (KV, orígenes permitidos)
 src/sw.js                   service worker: la app funciona sin conexión
 src/*.png                   iconos de la PWA
 build/icon.png              icono de la aplicación de escritorio (512×512)
@@ -77,6 +79,77 @@ dispositivo — pero conviene tenerlo presente.
   rápida de tenerla en el portátil, aunque sin sincronización con Excel: para eso está
   la app de Electron.
 
+## Backend opcional (Cloudflare Workers)
+
+Sin backend hay dos límites: los registros no salen del dispositivo, y desde el móvil
+no se puede escribir en el Excel (haría falta meter la clave de API en una página
+pública). El Worker de `server/` resuelve las dos cosas: guarda los registros en KV y
+es él quien llama a la API, con la clave como secreto suyo.
+
+```
+móvil / portátil  ──►  Worker  ──►  API de Claude  ──►  MCP de Microsoft 365  ──►  Excel
+                        │
+                        └─ KV: registros y ajustes compartidos
+```
+
+### Desplegarlo
+
+```bash
+cd server
+npm install
+npx wrangler login
+
+# 1. Crear el almacén y pegar el id que imprime en wrangler.toml
+npx wrangler kv namespace create RAIL
+
+# 2. Secretos (nunca van en el repositorio)
+npx wrangler secret put RAIL_ACCESS_TOKEN     # invéntate uno largo: openssl rand -hex 32
+npx wrangler secret put ANTHROPIC_API_KEY     # sk-ant-...
+npx wrangler secret put MS365_MCP_TOKEN       # token OAuth del conector, si lo tienes
+
+# 3. Publicar
+npx wrangler deploy
+```
+
+Queda en `https://rail-timesheet.<tu-cuenta>.workers.dev`. En la app, dentro de
+**Configuración y sincronización**, se rellenan *URL del servidor* y *Token de acceso*
+con ese `RAIL_ACCESS_TOKEN`. A partir de ahí todos los dispositivos ven lo mismo.
+
+Si tu usuario de GitHub no es `eljugon`, ajusta `ALLOWED_ORIGINS` en `wrangler.toml`
+con la URL de tus Pages. El valor `null` que ya viene es el origen que envía la app de
+escritorio, que carga la página como `file://`.
+
+### Qué expone
+
+| Ruta | Para qué |
+|---|---|
+| `GET /api/health` | comprobar que responde y si tiene claves cargadas |
+| `GET /api/entries` | todos los días registrados |
+| `PUT /api/entries/{fecha}` | crear o actualizar un día |
+| `DELETE /api/entries/{fecha}` | borrar un día |
+| `GET`/`PUT /api/settings` | ajustes compartidos (ruta del Excel, horas reguladas) |
+| `POST /api/sync` | escribir un día en el Excel |
+
+Todo pide `Authorization: Bearer <RAIL_ACCESS_TOKEN>`. Detalles de diseño que importan:
+
+- El cliente solo envía **una fecha** a `/api/sync`; el prompt lo construye el Worker
+  a partir de lo que tiene guardado. Así el token de acceso no sirve para mandar texto
+  libre al modelo con tu clave.
+- Las escrituras son **por día**, con lectura-modificación-escritura en el servidor: un
+  dispositivo con datos viejos solo puede tocar el día que está editando.
+- Un dispositivo no publica ajustes compartidos hasta haber leído del servidor, para no
+  pisar la configuración común con valores vacíos.
+- Sin conexión se ficha igual: queda en una cola local que se vacía sola al volver la
+  red.
+
+### Alternativa sin modelo
+
+Para lo que hace falta aquí — añadir una fila a una tabla — el camino directo es la API
+de Microsoft Graph (`/workbook/tables/Table15/rows`), sin modelo de por medio: más
+rápido, más barato y determinista. A cambio hay que registrar una aplicación en Entra
+ID, cosa que en un tenant corporativo no siempre es posible. Por eso el Worker usa el
+conector MCP, que reaprovecha lo que ya tenías montado.
+
 ## Dónde se guardan los datos
 
 En un único fichero `rail-data.json` dentro de la carpeta de datos de la app:
@@ -87,6 +160,9 @@ En un único fichero `rail-data.json` dentro de la carpeta de datos de la app:
 
 Contiene dos claves: `entries` (los días registrados) y `settings` (configuración).
 Copiar ese fichero es suficiente para llevarse el historial a otro equipo.
+
+Con backend configurado, ese fichero (y el `localStorage` en el móvil) pasa a ser una
+caché: la copia buena está en KV y se vuelve a leer en cada arranque.
 
 ## Sincronización con el Excel de OneDrive
 

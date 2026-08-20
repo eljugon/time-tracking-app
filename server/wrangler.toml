@@ -1,0 +1,21 @@
+name = "rail-timesheet"
+main = "src/worker.js"
+compatibility_date = "2026-08-20"
+# El SDK de Anthropic necesita las APIs de Node en el runtime del Worker.
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Orígenes que pueden llamar a la API. Separados por comas; "*" permite cualquiera.
+# "null" es el origen que manda la app de escritorio (carga la página como file://).
+ALLOWED_ORIGINS = "https://eljugon.github.io,null"
+
+# Crear con:  npx wrangler kv namespace create RAIL
+# y pegar aquí el id que imprime.
+[[kv_namespaces]]
+binding = "RAIL"
+id = "PEGAR_AQUI_EL_ID_DEL_NAMESPACE"
+
+# Los secretos NO van en este fichero. Se cargan con:
+#   npx wrangler secret put RAIL_ACCESS_TOKEN
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put MS365_MCP_TOKEN
